@@ -17,8 +17,3 @@ CausalCategoricalPolymorphism.lhs
 Contractions.lhs
   :  Fixed-points of contractions using G.Hutton and
      M.Jaskelioff encoding.
-
-ModularDatatypes.hs
-  :  Generalises the central mechanism of `Causal`, thus
-     illustrating a new way to write modular datatypes a la
-     carte, different from Swierstra's idea.

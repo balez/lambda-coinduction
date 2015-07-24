@@ -16,3 +16,12 @@ I wrote three versions of the library by increasing order of
 generality: `Causal` works on types of kind `*`,
 `CausalParam` works on types of kind `* -> *` and
 `CausalCategoricalPolymorphism` works on types of any kind.
+
+`ModularDatatypes`
+generalises the central mechanism of `Causal`, thus
+illustrating a new way to write modular datatypes a la
+carte, different from Swierstra's idea.
+
+`ModularDatatypes.Existential` is a first version with some
+limitations that the second version
+`ModularDatatypes.Subtyping` addresses.

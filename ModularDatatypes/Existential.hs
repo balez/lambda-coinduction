@@ -10,11 +10,10 @@ in the implementation of causal functions, only one was necessary
 --     , FlexibleInstances
      , GADTs
      , ConstraintKinds
---     , NoMonomorphismRestriction
  #-}
 
 
-module Coinduction.ModularDatatypes where
+module ModularDatatypes.Existential where
 import Auxiliary.Composition(res2)
 
 {-
@@ -78,16 +77,19 @@ instance Eval Mul where
 class Render f where
    render' :: f (Expr Render) -> String
 
+
 {-
 instance Render (Abstract Render) where
   render' (Abs y) = render' y
-
 -- inferred
 render :: Expr Render -> String
 render (In x) = render' x
+
 -}
 
+render :: Expr Render -> String
 render (In (Abs y)) = render' y
+
 
 instance Render Val where
    render' (Val i) = show i
