@@ -3,8 +3,9 @@ Causal functions over different coinductive types.
 In Causal.lhs, functions over a single coinductive types were
 considered, for instance [zip : Str a -> Str a -> Str a].
 
-However, a generalisation is possible, where we collect the
-types in a gadt indexed by a label corresponding to type names.
+However, a generalisation is possible, where a function can
+have inputs in different coinductive types and output in a different
+coinductive type.
 
 > {-# LANGUAGE
 >      GADTs
@@ -13,6 +14,8 @@ types in a gadt indexed by a label corresponding to type names.
 > , FlexibleContexts
 > , DeriveFunctor
 > , Rank2Types
+> , FunctionalDependencies
+> , TypeOperators
 > #-}
 
 > module Coinduction.MixedDatatypes where
@@ -21,7 +24,7 @@ Gadts are indexed types, thus we use a version of the causal
 library that supports indexed types.
 
 > import qualified Coinduction.Causal as C
-> import Coinduction.CausalParam hiding (Cons)
+> import Coinduction.CausalParam hiding (Cons, Apply, app)
 > import Auxiliary.Composition (res2)
 > import Prelude hiding (take)
 
@@ -132,10 +135,11 @@ example
   Let's try and make a type that is the union of all
   coinductive types.
 
-> class Functor (BaseFunctor t) => Coinductive t where
+  We add an associated type so that the type checker can
+  work out the type of 'step' for the instances of IsCausal.
+
+> class C.Nu (BaseFunctor t) t => Coinductive t where
 >   type BaseFunctor t :: * -> *
->   outC :: t -> BaseFunctor t t
->   inC :: BaseFunctor t t -> t
 
   Union of coinductive types. The types themselves serve as
   indices to the GADT.
@@ -156,27 +160,28 @@ example
 >
 
 > instance Nu UCF UC where
->   outNu (UC x) = UCF (fmap UC (outC x))
->   inNu (UCF y) = UC (inC (fmap fromUC y))
+>   outNu (UC x) = UCF (fmap UC (C.outNu x))
+>   inNu (UCF y) = UC (C.inNu (fmap fromUC y))
 
-  Now let's revisit our previous example using UC.
+   Now let's revisit our previous example using UC.
 
 > data StreamF a x = ConsF a x deriving Functor
+> instance C.Nu (StreamF a) (Stream a) where
+>   outNu (Cons h t) = ConsF h t
+>   inNu (ConsF h t) = Cons h t
 > instance Coinductive (Stream a) where
 >   type BaseFunctor (Stream a) = StreamF a
->   outC (Cons h t) = ConsF h t
->   inC (ConsF h t) = Cons h t
 
 > data TreeF a x = ForkF a x x deriving Functor
+> instance C.Nu (TreeF a) (Tree a) where
+>   outNu (Fork x l r) = ForkF x l r
+>   inNu (ForkF x l r) = Fork x l r
 > instance Coinductive (Tree a) where
 >   type BaseFunctor (Tree a) = TreeF a
->   outC (Fork x l r) = ForkF x l r
->   inC (ForkF x l r) = Fork x l r
 
 > data MergeU a x l where
 >   MergeU :: x (Stream a) -> x (Stream a) -> MergeU a x (Stream a)
 > mergeU = res2 inTerm MergeU
-
 
 > instance PFunctor (MergeU a) where
 >   pmap g (MergeU l r) = MergeU (g l) (g r)
@@ -197,14 +202,25 @@ example
 >   step' (FlattenU (_ :@ UCF (ForkF x l r))) =
 >             UCF (ConsF x (mergeU (flattenU l) (flattenU r)))
 
-The wrapping in UCF can be implicit, we just need to change the signature of `step`.
+  Wouldn't it be nice if we could avoid the UCF constructor?
+Let's try to make it implicit. We could do that by
+developping a library specifically for mixed-datatypes: then
+the At type could be:
 
-> class Functor f => IsCausalUCF f where
->   stepUCF :: forall x t . Coinductive t =>
->              f (C.At (BaseFunctor t) (C.Term (BaseFunctor t) x)) -> (BaseFunctor t) (C.Term (BaseFunctor t) x)
+> data At' f x t where
+>   (:@@) :: t -> BaseFunctor t (x t) -> At' f x t
 
-> atU :: Coinductive g => At UCF (Term UCF x) -> C.At g (C.Term g x)
-> atU (UCF x :@ UCF y) = (C.:@) x y
+Can we easily work with parametric types?
 
--- > instance IsCausalUCF f => IsCausal f UCF where
--- >   step' = UCF . stepUCF . atU
+ > data Apply a b x t = Apply (x (Stream (a -> b))) (x (Stream a))
+ > infixl 5 `app`
+ > app = inTerm `res2` Apply
+ >
+ > instance PFunctor (Apply a b) where
+ >   pmap n (Apply f x) = Apply (n f) (n x)
+ >
+
+ > instance IsCausal (Apply a b) UCF where
+ >   step' (Apply (_:@ UCF (ConsF f fs))
+ >                (_:@ UCF (ConsF x xs)))
+ >     = UCF (ConsF (f x) (app fs xs))
