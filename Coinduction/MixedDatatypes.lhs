@@ -142,7 +142,7 @@ example
 >   type BaseFunctor t :: * -> *
 
   Union of coinductive types. The types themselves serve as
-  indices to the GADT.
+indices to the GADT.
 
 > data UC t where
 >   UC :: Coinductive t => t -> UC t
@@ -201,26 +201,31 @@ example
 > instance IsCausal (FlattenU a) UCF where
 >   step' (FlattenU (_ :@ UCF (ForkF x l r))) =
 >             UCF (ConsF x (mergeU (flattenU l) (flattenU r)))
+ 
+   Wouldn't it be nice if we could avoid the UCF constructor?
+ Let's try to make it implicit. We could do that by
+ developping a library specifically for mixed-datatypes: then
+ the At type could be:
+ 
+ > data At' f x t where
+ >   (:@@) :: t -> BaseFunctor t (x t) -> At' f x t
+ 
+Can we easily work with parametric types? YES!
 
-  Wouldn't it be nice if we could avoid the UCF constructor?
-Let's try to make it implicit. We could do that by
-developping a library specifically for mixed-datatypes: then
-the At type could be:
+> data Apply a b x t where
+>   Apply ::
+>     x (Stream (a -> b)) ->
+>     x (Stream a) ->
+>     Apply a b x (Stream b)
+>
+> infixl 5 `app`
+> app = inTerm `res2` Apply
+>
+> instance PFunctor (Apply a b) where
+>   pmap n (Apply f x) = Apply (n f) (n x)
+>
 
-> data At' f x t where
->   (:@@) :: t -> BaseFunctor t (x t) -> At' f x t
-
-Can we easily work with parametric types?
-
- > data Apply a b x t = Apply (x (Stream (a -> b))) (x (Stream a))
- > infixl 5 `app`
- > app = inTerm `res2` Apply
- >
- > instance PFunctor (Apply a b) where
- >   pmap n (Apply f x) = Apply (n f) (n x)
- >
-
- > instance IsCausal (Apply a b) UCF where
- >   step' (Apply (_:@ UCF (ConsF f fs))
- >                (_:@ UCF (ConsF x xs)))
- >     = UCF (ConsF (f x) (app fs xs))
+> instance IsCausal (Apply a b) UCF where
+>   step' (Apply (_:@ UCF (ConsF f fs))
+>                (_:@ UCF (ConsF x xs)))
+>     = UCF (ConsF (f x) (app fs xs))
