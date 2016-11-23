@@ -15,9 +15,9 @@ They are composable.
 
 IMPORTANT: relate that with tree transducers
 
-> {-# LANGUAGE 
->       RankNTypes 
->     , DeriveFunctor 
+> {-# LANGUAGE
+>       RankNTypes
+>     , DeriveFunctor
 >     , TypeOperators
 >     , MultiParamTypeClasses
 >     , FlexibleInstances
@@ -70,10 +70,10 @@ Algebras and coalgebras in the category of parametric types.
 > type Alg g r   = g r :-> r
 > type Coalg g r = r :-> g r
 
-Rep (representation) is a Class for generic programming with
-recursive datatypes with one parameter.  
-Nu f must be isomorphic to t and the 
-functions outRep and inRep must bijections. Provides a generic view.
+Nu is a Class for generic programming with recursive
+datatypes with one parameter.  `Nu f' must be isomorphic to
+`t' and the functions outRep and inRep must
+bijections. Provides a generic view.
 
 > class PFunctor f => Nu f t | t -> f where
 >   outNu :: Coalg f t
@@ -98,7 +98,7 @@ a type of pairs used for pattern annotations corresponding to l@(h:t)
 
 > infixr 0 :@
 
-At :: PFunctor -> PType -> Type
+At :: PFunctor -> PFunctor
 
 > data At f t x = t x :@ f t x
 
@@ -137,7 +137,7 @@ Term :: PFunctor -> PType -> PType
 > type StrTm = Term StrF
 
  > type CausalAlg g r = Alg (Causal g) r
-  
+ 
 The primary operation is step, step' is there to make it easier
 to write the definition. By automatically wrapping the
 recursive elements in `Ret` to make it directly useable on
@@ -164,7 +164,7 @@ Note that automatically `step` is an operation of Causal, and
 together with `pmap`, are the sole operations available on
 values of this type: the existential is an abstraction
 mechanism that hides all the particulars of an actual value.
-              
+ 
 > instance PFunctor (Causal g) where
 >   pmap m (Causal y) = Causal (pmap m y)
 
@@ -175,11 +175,12 @@ mechanism that hides all the particulars of an actual value.
 
 But invariably we will need to use `pmap` before being able
 to apply `step`, so we provide a function that does both:
+coalgStep.
 
 > tagArg :: Coalg g s -> Coalg (At g) s
 > tagArg out x = x :@ out x
 
-> coalgStep :: IsCausal f g => 
+> coalgStep :: IsCausal f g =>
 >   Coalg g s -> f s :-> g (Term g s)
 
 > coalgStep out fs = step (tagArg out `pmap` fs)
@@ -204,7 +205,7 @@ on `semGuardedCg c` rather than a local definition.
 > runCausal = semCausal . inTerm . pmap Var
 
 > lambdaCoiter :: (IsCausal f g, Nu g t) => Alg f t
-> lambdaCoiter = 
+> lambdaCoiter =
 >   inNu . pmap (freeAlg lambdaCoiter) . step . pmap (tagArg outNu)
 
 > runGuardedCg :: Nu g t => GuardedCg g s -> s :-> t
@@ -241,7 +242,7 @@ The parameter comes into play for the map function
  
 > instance IsCausal (Map a) StrF where
 >   step' (Map f (_:@ h :< t)) = f h :< map f t
-                                 
+ 
 no stream argument
 
 > data Iterate (s :: * -> *) a = Iterate (a -> a) a
@@ -257,7 +258,7 @@ no stream argument
 
 
    take 10 $ runCausal (Iterate (+3) 0)
-                          
+ 
 > data Repeat (t :: * -> *) a = Repeat a
 > repeat = inTerm . Repeat
 
@@ -268,7 +269,7 @@ no stream argument
 >   step' (Repeat x) = x :< repeat x
 
 
-                          
+ 
 Applicative
 
 > data Apply a t b = Apply (t (a -> b)) (t a)

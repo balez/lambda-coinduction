@@ -13,9 +13,9 @@ They are composable.
 
 IMPORTANT: relate that with tree transducers
 
-> {-# LANGUAGE 
->       Rank2Types 
->     , DeriveFunctor 
+> {-# LANGUAGE
+>       Rank2Types
+>     , DeriveFunctor
 >     , TypeOperators
 >     , FunctionalDependencies
 >     , FlexibleInstances
@@ -42,7 +42,7 @@ functions outRep and inRep must bijections. Provides a generic view.
 >   inNu :: f t -> t
 
 
-needs FlexibleInstances
+The instance "Nu g (Nu g)" requires the extension FlexibleInstances
 
 -- > instance Functor g => Nu g (Nu g) where
 -- >   outNu = outNu
@@ -53,20 +53,17 @@ needs FlexibleInstances
 
 > type Coalg g s = s -> g s
 
-> unfold :: (Functor g, Nu g t) => Coalg g s -> s -> t
+> unfold :: (Nu g t) => Coalg g s -> s -> t
 > unfold c = go
 >   where go s = inNu $ go <$> c s
  
 a type of pairs used for pattern annotations corresponding to l@(h:t)
-
- > data a :@ b = a :@ b deriving Functor
 
 > data At f x = x :@ f x deriving Functor
 
 > infixr 0 :@
 
 > type Distr f g = forall x . f (At g x) -> g (f x)
-
 
 Streams: the empty list is not admitted for this type.
 
@@ -82,6 +79,7 @@ the stream functor, corresponding to the cons (:) constructor.
 >   inNu (h :< t) = h :t
 
 example: zip
+zip (x:l') r = x : zip r l'
 
 vector of two elements
 
@@ -89,20 +87,21 @@ vector of two elements
 >   deriving Functor
 
 > zipDistr :: Distr V2 (StrF a)
-> zipDistr (V2 (l :@ x :< l') (r :@ y :< r')) = x :< V2 r l'
+> zipDistr (V2 (_ :@ x :< l') (r :@ _)) = x :< V2 r l'
 
 > type Alg f a = f a -> a
 
+semDistr is guarded by constructor, thus productive.
+
 > semDistr :: Functor f => Distr f (StrF a) -> Alg f (Str a)
 > semDistr d y = case d (fmap out y) of
->   h :< y' -> h : semDistr d y'    
+>   h :< y' -> h : semDistr d y'
 >   where out l@(h:t) = (l :@ h :< t)
-
 
 The problem with the previous definition is that it is not
 modular, if I need zip as part of another coalgebra
 definition, I would need to rewrite it. The idea for
-compositionality is to let the result of the coalgebra to be
+compositionality is to let the result of the coalgebra be
 another functor.
 
 IsCausal: compositional stream (or syntactic?) coalgebra it is
@@ -126,7 +125,7 @@ extended guardedness.
 > freeAlg alg (App y) = alg (freeAlg alg <$> y)
 
 > instance Functor f => Monad (Free f) where
->   return = Var              
+>   return = Var
 >   m >>= f = foldFree f App m
 
 A Term is usually a data representation of the functions to
@@ -141,7 +140,7 @@ be applied to some recursive arguments.
 
 the primary operation is step, step' is there to make it
 easier to write the definition. By automatically wrapping the
-recursive elements in `Var` to make it directly useable on
+recursive elements in `Var` to make it directly usable on
 the right hand side. When defining step', it is an error to
 pattern match on the Term structure of the recursive element,
 because only `Var` will ever be used.  The solution is to
@@ -178,7 +177,7 @@ IsCausal (Causal g) g
 But invariably we will need to use `fmap` before being able
 to apply `step`, so we provide a function that does both:
 
-> coalgStep :: IsCausal f g => 
+> coalgStep :: IsCausal f g =>
 >   Coalg g x -> f x -> g (Term g x)
 > coalgStep out f = step (tagArg out <$> f)
 
@@ -186,10 +185,8 @@ to apply `step`, so we provide a function that does both:
 > tagArg out x = x :@ out x
  
  
-  > joinCausal :: Functor g => Causal g (Causal g x) -> Causal g x
+The semantics for IsCausal flattens (interprets?) the free monad
  
- The semantics for IsCausal flattens (interprets?) the free monad
-               
     semCausal :: (Functor g, Nu g t) => Term g t -> t
     semCausal (Var x) = x
     semCausal (App w) = ?
@@ -204,35 +201,15 @@ we define a function `termCg` to compute it:
  
 > termCg :: Functor g => Coalg g s -> Coalg g (Term g s)
 > termCg c = semGuardedCg (fmap Var . c)
-             
+ 
  > termCg c = c'
- >   where              
+ >   where
  >    c' (Var x) = Var <$> c x
  >    c' (App w) = join <$> coalgStep c' w -- w :: Causal g (Term g s)
 
-Now:
- 
-    coalgStep (termCg outNu) w :: g (Term g (Term g (Nu g)))
- 
-and we need to recursively apply semCausal.  First we must
-`join` the two applications of `Term g` into one, using the
-fact that it is a (free) monad.
-
-This definition is guarded by the constructor `inNu`: the
-fmap `<$>` duplicates the recursive calls `semCausal . join`
-to all structural recursive positions in `w`. This is exactly
-what guardedness means.
-
-But perhaps define it as an unfold or futu might be more
-convincing. (todo later).
-
- 
 > semCausal :: (Nu g t) => Alg (Term g) t
 > semCausal = unfold (termCg outNu)
 
- > semCausal (Var x) = x
- > semCausal (App w) = 
- >   inNu $ semCausal . join <$> coalgStep (termCg outNu) w
 
 > runCausal :: (IsCausal f g, Nu g t) => Alg f t
 > runCausal = semCausal . inTerm . fmap Var
@@ -241,19 +218,22 @@ convincing. (todo later).
 We get back semCausal by extension of runCausal
 
 > semCausal' :: (Nu g t) => Alg (Term g) t
-> semCausal' =  freeAlg runCausal 
+> semCausal' =  freeAlg runCausal
 
 
 Fast implementation without building the state
 
-Now that we now our functions are productive we don't need to actually
-define them as coiterations! we implement the lambda-coiteration!
+Now that we know our functions are productive we don't need to actually
+define them as coiterations of a term coalgebra: this involves building the terms and is slow.
+Instead we can use lambda-coiteration.
 
 > lambdaCoiter :: (IsCausal f g, Nu g t) => Alg f t
-> lambdaCoiter = 
+> lambdaCoiter =
 >   inNu . fmap (freeAlg lambdaCoiter) . step . fmap (tagArg outNu)
 
 --------------------------------------------------
+
+The identity function is causal.
 
 > data IdStr a x = IdStr x deriving Functor
 > idStr :: StrTm a s -> StrTm a s
@@ -261,11 +241,11 @@ define them as coiterations! we implement the lambda-coiteration!
 > idStr'' = step . IdStr
 > idStr' = step' . IdStr
 > instance IsCausal (IdStr a) (StrF a) where
->   step' (IdStr (_ :@ h :< t)) = h :< t
+>   step' (IdStr (_ :@ x)) = x
 
  >   step (IdStr (_ :@ h :< t)) = h :< Var t
 
-Importantly, the first causal functions to recognise are the constructors!
+Importantly, the first causal functions to identify are the constructors!
 
 > data Cons a x = Cons a x
 >   deriving Functor
@@ -294,16 +274,6 @@ Thus we can define a prepend function that adds a finite prefix to a stream:
 >   step' (Prepend [] s) = idStr' s
 >   step' (Prepend (h:t) (s :@ _)) = h :< foldr (<:) s t
 
- >   step (Prepend [] (_ :@ x :< x')) = x :< Var x'
- >   step (Prepend (h:t) (s :@ _)) = h :< t ++: Var s
-
- >   step (Prepend [] x) = idStr'' x
- >   step (Prepend (h:t) (s :@ _)) = h :< foldr (<:) (Var s) t
-
- >   step' (Prepend [] (_ :@ x :< x')) = x :< x'
- >   step' (Prepend (h:t) (s :@ _)) = h :< foldr (<:) s t
-
-
  > instance IsCausal (Prepend a) (StrF a) where
  >   step' (Prepend [] (_ :@ x :< x')) = x :< x'
  >   step' (Prepend (h:t) (s :@ _)) = h :< t ++: s
@@ -312,7 +282,7 @@ Thus we can define a prepend function that adds a finite prefix to a stream:
 
 Applicative Lifting, corresponds to liftA2
 
-> data ZipWith a x = ZipWith (a -> a -> a) x x 
+> data ZipWith a x = ZipWith (a -> a -> a) x x
 >   deriving Functor
 
 > zipWith :: (a -> a -> a) -> StrTm a s -> StrTm a s -> StrTm a s
@@ -329,18 +299,18 @@ take 10 $ runCausal (ZipWith (+) [1..] [1..])
 
 
 > data Shuffle a x = Shuffle x x deriving Functor
-> shuffle :: Num a => StrTm a s -> StrTm a s -> StrTm a s
-> shuffle = inTerm `res2` Shuffle
+> (<*>) :: Num a => StrTm a s -> StrTm a s -> StrTm a s
+> (<*>) = inTerm `res2` Shuffle
 
 > instance Num a => IsCausal (Shuffle a) (StrF a) where
 >   step' (Shuffle (x :@ x0 :< x') (y :@ y0 :< y'))
->     = x0 * y0 :< (x `shuffle` y') <+> (x' `shuffle` x)
+>     = x0 * y0 :< (x <*> y') <+> (x' <*> x)
 
 > data Star a x = Star x  deriving Functor
 > star :: Num a => StrTm a s -> StrTm a s
 > star = inTerm . Star
 > instance Num a => IsCausal (Star a) (StrF a) where
->   step' (Star (s :@ h :< t)) = 1 :< t `shuffle` (star s `shuffle` star s)
+>   step' (Star (s :@ h :< t)) = 1 :< t <*> (star s <*> star s)
  
 Example with zip. `a` is a phantom type used for the IsCausal instance.
  
@@ -360,10 +330,10 @@ Zip didn't really need the flexibility of using the free
 monad. The next example will:
  
     iterate f (h:t) = h : map f (iterate f t)
- 
+
+We now define a monomorphic map on streams.
 We're not ready for the general map: it would have to work on
-different functors. And probably we would need dependent
-types to write it.
+different functors. See CausalParam.lhs for a solution.
 
 > data Map a x = Map (a -> a) x
 >   deriving Functor
@@ -383,7 +353,7 @@ types to write it.
  
    runCausal (ZipEvOdd x y) == even x `zip` odd y
  
-> data ZipEvOdd a x = ZipEvOdd x x 
+> data ZipEvOdd a x = ZipEvOdd x x
 >   deriving Functor
 
 > zipEvOdd = inTerm `res2` ZipEvOdd
@@ -394,22 +364,22 @@ types to write it.
 phi ~(h:t)
   = h : (even (phi (odd t)) /><\ odd (phi (even t)))
 
-in this case, phi isn't a IsCausal but a coalgebra that uses IsCausals.
-We introducte a new type for that: guarded coalgebras are
-not compositional, but they can use any of the IsCausal as guard
-of the states.
-
-A better name might be GuardedCg
+in this case, phi isn't causal but is guarded by
+causal functions.  We introducte a new type for that:
+GuardedCg. Guarded coalgebras are not necessarily causal,
+so they cannot be used as guards, but they can use any of the
+causal functions  as guard of the states.
 
 > type GuardedCg g s = s -> g (Term g s)
 
-The semantic is coalgebra. we must extend the domain with
-guards.  The base case is our synCg, the Causal case uses
-step to get the next productive layer of the coinductive output.
+The semantics is a coalgebra. We must extend the domain with
+guards.  The base case uses the guarded coalgebra, the Causal
+case uses step to get the next productive layer of the
+coinductive output.
 
 > semGuardedCg :: Functor g => GuardedCg g s -> Coalg g (Term g s)
 > semGuardedCg c = c'
->   where 
+>   where
 >     c' (Var s) = c s
 >     c' (App w) =   -- w :: Causal g (Term g s)
 >       fmap join $ coalgStep c' w -- coalgStep c' w :: g (Term g (Term g s))
@@ -417,7 +387,9 @@ step to get the next productive layer of the coinductive output.
 
 > runGuardedCg :: Nu g t => GuardedCg g s -> s -> t
 > runGuardedCg c y = unfold (semGuardedCg c) (Var y)
- 
+
+Fast version using lambda-coiteration.
+
 > upto :: Nu g t => GuardedCg g s -> s -> t
 > upto c = inNu . fmap (foldFree (upto c) lambdaCoiter) . c
 
@@ -430,20 +402,13 @@ back to phi
 > even ~(h : t)     = h : odd t
 > odd  ~(h : t)     = even t
 
-
- > data Phi a = Phi [a]
- > phi = Var . Phi
- > 
- > phiCg :: GuardedCg (StrF a) (Phi a)
- > phiCg (Phi (h:t)) = h :< zipEvOdd (phi (odd t)) (phi (even t))
- 
 > phi = Var
 > phiCg :: GuardedCg (StrF a) (Str a)
 > phiCg (h:t) = h :< zipEvOdd (phi (odd t)) (phi (even t))
 
 
-    take 10 $ runGuardedCg phiCg (Phi [1..])
-    take 10 $ Prelude.zip (runGuardedCg phiCg (Phi [1..])) (phi_ [1..])
+    take 10 $ runGuardedCg phiCg [1..]
+    take 10 $ Prelude.zip (runGuardedCg phiCg [1..]) (phi_ [1..])
 
 
  *
@@ -452,16 +417,14 @@ back to phi
 > psi_ ~(h:t)
 >  = h : (even (psi_ (odd t)) /><\ psi_ t)
 
-                      
-> data Psi a = Psi [a]
-> psi = Var . Psi
-> 
-> psiCg :: GuardedCg (StrF a) (Psi a)
-> psiCg (Psi (h:t)) = h :< zipEv (psi (odd t)) (psi t)
+> psi = Var
+>
+> psiCg :: GuardedCg (StrF a) (Str a)
+> psiCg (h:t) = h :< zipEv (psi (odd t)) (psi t)
 
    runCausal (ZipEv x y) == even x `zip` y
 
-> data ZipEv a x = ZipEv x x 
+> data ZipEv a x = ZipEv x x
 >   deriving Functor
 
 > zipEv = inTerm `res2` ZipEv
@@ -472,7 +435,7 @@ back to phi
 
    runCausal (ZipOdd x y) == x `zip` odd y
 
-> data ZipOdd a x = ZipOdd x x 
+> data ZipOdd a x = ZipOdd x x
 >   deriving Functor
 
 > zipOdd = inTerm `res2` ZipOdd
@@ -482,10 +445,26 @@ back to phi
 
     take 10 $ Prelude.zip (runGuardedCg psiCg (Psi [1..])) (psi_ [1..])
 
+
+
+A test with a stream datastructure for performance comparison
+
+> data S a = C a (S a)
+> evenS ~(C h t) = C h (oddS t)
+> oddS ~(C h t) = evenS t
+> ~(C h t) `zipS` b = C h (b `zipS` t)
+>
+> psiS ~(C h t)
+>  = C h (evenS (psiS (oddS t)) `zipS` psiS t)
+
+> from_list (h:t) = C h (from_list t)
+> to_list (C h t) = h : (to_list t)
+> psi' = to_list . psiS . from_list
+
  *
 * *
 
-Nesting. see Nesting.hs
+Nesting.
 
 > nest_ (h:t) = h: nest_ (nest_ (even t)) /><\ t
 
@@ -505,36 +484,21 @@ Nest n xs corresponds to nest_^n xs
 >               | n > 0  = nest (2*n) (even s) `zip` tail_nest (n-1) s
 
     take 10 $ Prelude.zip (runGuardedCg nestCg (Nest 1 [1..])) (nest_ [1..])
-    
+ 
     all (uncurry (==)) . take 10000 $ Prelude.zip (runGuardedCg nestCg (Nest 1 [1..])) (nest_ [1..])
-
-
-same but with different name
-
-> data IterAlpha a = IterAlpha Integer [a]
->   deriving Functor
-
-> ialpha = Var `res2` IterAlpha
-
-> ialphaCg :: GuardedCg (StrF a) (IterAlpha a)
-> ialphaCg (IterAlpha n (h:t))
->     = h :< tail_ialpha n t
-
-> tail_ialpha n s | n == 0 = ialpha 0 s -- same as 'fromList'
->               | n > 0  = ialpha (2*n) (even s) `zip` tail_ialpha (n-1) s
 
 
  *
 * *
 
-Another definition with nested recursive calls. See Nesting6.lhs
+Another definition with nested recursive calls.
 This one is a IsCausal.
 
 > nestor_ (h:t) = h: nestor_ (even (nestor_ t)) /><\ t
 
 `Nestor n` corresponds to `(nestor_ . even)^n . nestor_`
 
-> data Nestor a x = Nestor Integer x 
+> data Nestor a x = Nestor Integer x
 >   deriving Functor
 
 > nestor = inTerm `res2` Nestor
@@ -553,23 +517,6 @@ This example illustrate nicely the need for the free monad for states.
     take 10 $ Prelude.zip (runCausal (Nestor 0 [1..])) (nestor_ [1..])
 
     all (uncurry (==)) . take 1000 $ Prelude.zip (runCausal (Nestor 0 [1..])) (nestor_ [1..])
-
-Different names
-
-> data BEB a x = BEB Integer x 
->   deriving Functor
-
-> beb = inTerm `res2` BEB
-
-
-> instance IsCausal (BEB a) (StrF a) where
->   step' (BEB n (_ :@ h :< t))
->     = h :< tail_beb n t
-
-> tail_beb n s
->    | n == 0 = beb 1 s `zip` s
->    | n > 0  = beb (n+1) s `zipOdd` tail_beb (n-1) s
-
 
 --------------------------------------------------
 
@@ -601,19 +548,19 @@ it cannot do anything with it except duplicate it after the guard.
 >   where fib = Var x
 
 Again, we could avoid the need to inject variables by making
-the type `Term` abstract and change `Contraction g` to: 
+the type `Term` abstract and change `Contraction g` to:
 `forall s . Coalg g (Term g s)`
 
 Semantically, `fixpoint c = fix (upto c)` but there would be
 no sharing, so we inline `upto` to explicitly share `upto c it = it`
 
 > fixpoint :: Nu g t => Contraction g -> t
-> fixpoint c = it 
+> fixpoint c = it
 >   where it = inNu . fmap (foldFree (const it) lambdaCoiter) . c $ it
 
 
 > fix f = it where it = f it
-                                                     
-  
+ 
+ 
 > fib' :: Str Integer
 > fib' = fixpoint fibF

@@ -202,15 +202,9 @@ indices to the GADT.
 >   step' (FlattenU (_ :@ UCF (ForkF x l r))) =
 >             UCF (ConsF x (mergeU (flattenU l) (flattenU r)))
  
-   Wouldn't it be nice if we could avoid the UCF constructor?
- Let's try to make it implicit. We could do that by
- developping a library specifically for mixed-datatypes: then
- the At type could be:
- 
- > data At' f x t where
- >   (:@@) :: t -> BaseFunctor t (x t) -> At' f x t
- 
-Can we easily work with parametric types? YES!
+
+Cherry on the cake, we easily work with parametric types, and
+with any numbers of parameters.
 
 > data Apply a b x t where
 >   Apply ::
@@ -229,3 +223,20 @@ Can we easily work with parametric types? YES!
 >   step' (Apply (_:@ UCF (ConsF f fs))
 >                (_:@ UCF (ConsF x xs)))
 >     = UCF (ConsF (f x) (app fs xs))
+
+
+  Wouldn't it be nice if we could avoid the UCF constructor?
+  The library UCausal solves this problem by defining a At type
+ 
+> data At' x t where
+>   (:@@) :: Coinductive t => x t -> BaseFunctor t (x t) -> At' x t
+
+  and the step function becomes
+
+  step :: forall x . f (At x) :-> UCF (Term x)
+
+  There isn't much we can do to eliminate the UCF on the right
+  hand side because it is an existential type.
+
+  The only practical solution is to define synonyms for the
+  constructors.
